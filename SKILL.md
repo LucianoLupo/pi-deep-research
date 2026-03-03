@@ -20,16 +20,46 @@ This skill requires the `pi-deep-research` extension to be installed and the Chr
 | `research_get_content` | Retrieve previously fetched content by ID, URL, or query. |
 | `research_list` | List all cached results with session summary stats. |
 
+## Research Workspace
+
+Every research session gets a dedicated folder. Create it at the start of Phase 1.
+
+```
+~/Documents/Research/
+└── YYYY-MM-DD-[topic-slug]/
+    ├── report.md              ← final report (always created)
+    ├── sources/               ← downloaded PDFs, images, saved pages (created on demand)
+    └── findings/              ← analyst subagent outputs in pipeline mode (created on demand)
+```
+
+**Naming:** Use `YYYY-MM-DD-` prefix + lowercase hyphenated topic slug. Examples:
+- `2026-03-03-gemini-deep-research`
+- `2026-03-03-rust-async-ecosystem`
+
+**What goes where:**
+- `report.md` — the final synthesized report with citations. Always created.
+- `sources/` — only create when the user asks to save PDFs, images, or raw pages. Don't save by default.
+- `findings/` — in pipeline mode, save each analyst subagent's structured output here (e.g., `findings/subtopic-a.md`). Useful for auditing the research chain.
+
+Create the base folder and `report.md` at the start. Create `sources/` and `findings/` only when needed.
+
 ## Workflow: Plan → Search → Synthesize → Verify
 
 ### Phase 1: Plan (1-2 minutes)
 
 When the user asks for research:
 
-1. **Don't ask a barrage of questions.** Instead, propose a research plan:
+1. **Create the research workspace:**
+```bash
+mkdir -p ~/Documents/Research/YYYY-MM-DD-[topic-slug]
+```
+
+2. **Don't ask a barrage of questions.** Instead, propose a research plan:
 
 ```
 I'll research [topic]. Here's my plan:
+
+📁 Workspace: ~/Documents/Research/YYYY-MM-DD-[topic-slug]/
 
 1. [Subtopic A] — what to investigate
 2. [Subtopic B] — what to investigate
@@ -39,11 +69,11 @@ Estimated: ~X searches across Y subtopics.
 Want me to adjust anything, or shall I start?
 ```
 
-2. Keep the plan to **3-7 subtopics**. Identify which can be searched in parallel vs. which depend on earlier findings.
+3. Keep the plan to **3-7 subtopics**. Identify which can be searched in parallel vs. which depend on earlier findings.
 
-3. If the user's request is genuinely ambiguous (not just broad), ask **one** clarifying question — not five.
+4. If the user's request is genuinely ambiguous (not just broad), ask **one** clarifying question — not five.
 
-4. Once confirmed, proceed immediately.
+5. Once confirmed, proceed immediately.
 
 ### Phase 2: Search Loop (5-20 minutes)
 
@@ -94,12 +124,13 @@ Once all subtopics are covered:
 
 1. **Review what you have**: Call `research_list` to see your full research inventory
 2. **Re-read key sources**: Use `research_get_content` to revisit the most important sources
-3. **Write the report**:
+3. **Write the report** to the workspace (`~/Documents/Research/YYYY-MM-DD-[topic-slug]/report.md`):
    - Start with an executive summary (key findings in 3-5 bullets)
    - Organize by theme/subtopic, not by source
    - Every factual claim gets a citation `[Source Title](url)`
    - Note where sources disagree — don't silently pick one
    - Include a "Limitations" section for what you couldn't find or verify
+   - Include a "Sources" section at the end with full bibliography
 4. **Be opinionated**: Don't just list facts. Synthesize patterns, identify trends, highlight what matters most. Say "the evidence suggests X" not just "Source A says X, Source B says Y."
 
 ### Phase 4: Verify (2-3 minutes)
@@ -213,7 +244,9 @@ Instructions:
 3. If a source is critical and was truncated, re-fetch it without maxWords
 4. If sources reveal important follow-up questions, run 1-2 additional searches
 
-Return your findings in this exact format:
+Write your findings to: ~/Documents/Research/YYYY-MM-DD-[topic-slug]/findings/[subtopic-slug].md
+
+Use this exact format:
 
 ## Key Findings
 - [finding 1 with specific data/quotes] (source: [url])
@@ -239,11 +272,11 @@ Do NOT write prose or a report. Return structured findings only.
 The main agent receives structured findings from all analysts. It never saw the raw page content — only distilled bullets, contradictions, and gaps. This means the main agent's context is clean and focused.
 
 At this stage, the main agent:
-1. Reviews all analyst findings
+1. Reads all analyst findings from `findings/*.md` in the research workspace
 2. Identifies cross-cutting themes and patterns
 3. Resolves contradictions (or flags them)
 4. Fills any critical gaps with targeted searches
-5. Writes the final report with citations
+5. Writes the final report to `report.md` in the research workspace
 
 ### Stage 4: Reviewer (optional subagent)
 
