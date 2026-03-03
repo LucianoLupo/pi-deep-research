@@ -65,9 +65,42 @@ export function getResult(id: string): StoredResearchData | undefined {
   return store.get(id);
 }
 
+// Normalize URLs for deduplication: lowercase host, strip trailing slash,
+// remove tracking params, sort remaining query params. Keeps fragments.
+const TRACKING_PARAMS = new Set([
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "fbclid", "gclid", "gclsrc", "dclid", "msclkid", "ref", "source",
+]);
+
+function normalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    // Lowercase hostname
+    parsed.hostname = parsed.hostname.toLowerCase();
+    // Remove tracking params
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (TRACKING_PARAMS.has(key.toLowerCase())) {
+        parsed.searchParams.delete(key);
+      }
+    }
+    // Sort remaining params
+    parsed.searchParams.sort();
+    // Build normalized string
+    let normalized = parsed.origin + parsed.pathname + parsed.search + parsed.hash;
+    // Strip trailing slash (except root "/")
+    if (normalized.endsWith("/") && parsed.pathname !== "/") {
+      normalized = normalized.slice(0, -1);
+    }
+    return normalized;
+  } catch {
+    return url;
+  }
+}
+
 export function getResultByUrl(url: string): StoredResearchData | undefined {
+  const norm = normalizeUrl(url);
   for (const data of store.values()) {
-    if (data.urls?.some((u) => u.url === url)) return data;
+    if (data.urls?.some((u) => normalizeUrl(u.url) === norm)) return data;
   }
   return undefined;
 }
@@ -119,6 +152,52 @@ export function restoreFromSession(ctx: ExtensionContext): number {
   }
 
   return restored;
+}
+
+export interface SessionStats {
+  searchCount: number;
+  fetchCount: number;
+  fetchOk: number;
+  fetchErrors: number;
+  totalWords: number;
+  domains: string[];
+}
+
+export function getSessionStats(): SessionStats {
+  let searchCount = 0;
+  let fetchCount = 0;
+  let fetchOk = 0;
+  let fetchErrors = 0;
+  let totalWords = 0;
+  const domainSet = new Set<string>();
+
+  for (const data of store.values()) {
+    if (data.type === "search") {
+      searchCount++;
+    } else if (data.type === "fetch" && data.urls) {
+      fetchCount++;
+      for (const u of data.urls) {
+        if (u.error !== null) {
+          fetchErrors++;
+        } else {
+          fetchOk++;
+          totalWords += u.wordCount;
+        }
+        try {
+          domainSet.add(new URL(u.url).hostname);
+        } catch { /* skip malformed */ }
+      }
+    }
+  }
+
+  return {
+    searchCount,
+    fetchCount,
+    fetchOk,
+    fetchErrors,
+    totalWords,
+    domains: [...domainSet].sort(),
+  };
 }
 
 export function clearAll(): void {

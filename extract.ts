@@ -44,6 +44,30 @@ function countWords(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
+// Truncate content to approximately maxWords at a sentence boundary
+export function truncateContent(content: string, maxWords: number): string {
+  const words = content.split(/\s+/);
+  if (words.length <= maxWords) return content;
+
+  // Join up to maxWords, then find the last sentence boundary
+  const truncated = words.slice(0, maxWords).join(" ");
+
+  // Find the LAST sentence boundary within the truncated text
+  let lastBoundary = -1;
+  const boundaryPattern = /[.!?](?:\s|$)/g;
+  let match;
+  while ((match = boundaryPattern.exec(truncated)) !== null) {
+    // Only accept boundaries past the first 30% of content (avoid cutting too early)
+    if (match.index > truncated.length * 0.3) {
+      lastBoundary = match.index + 1;
+    }
+  }
+
+  const result = lastBoundary > 0 ? truncated.slice(0, lastBoundary) : truncated;
+  const resultWords = countWords(result);
+  return result + `\n\n[Content truncated at ~${resultWords} words]`;
+}
+
 // #3: Removed inFlight dedup — p-limit(5) provides concurrency control
 
 export async function extractContent(
@@ -187,12 +211,16 @@ async function extractViaHttp(
   const likelyPaywall =
     wc < 300 && PAYWALL_PATTERN.test(markdown + " " + html.slice(0, 5000));
 
+  // Extract publication date from meta tags
+  const date = extractDateFromHtml(document) || undefined;
+
   return {
     url,
     title: article.title || document.title || url,
     content: markdown,
     wordCount: wc,
     author: article.byline || undefined,
+    date,
     excerpt: article.excerpt || undefined,
     method: "http-readability",
     error: null,
@@ -313,6 +341,30 @@ async function readBody(res: Response, maxSize: number): Promise<string> {
     offset += chunk.byteLength;
   }
   return new TextDecoder().decode(combined);
+}
+
+// Extract publication date from HTML meta tags and <time> elements
+function extractDateFromHtml(document: any): string | null {
+  // Priority order: article:published_time > meta date > <time datetime>
+  const selectors = [
+    'meta[property="article:published_time"]',
+    'meta[name="date"]',
+    'meta[name="publication_date"]',
+    'meta[name="publish_date"]',
+    'meta[property="og:article:published_time"]',
+  ];
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    const val = el?.getAttribute("content");
+    if (val) return val;
+  }
+  // Fallback: first <time> element with a datetime attribute
+  const timeEl = document.querySelector("time[datetime]");
+  if (timeEl) {
+    const dt = timeEl.getAttribute("datetime");
+    if (dt) return dt;
+  }
+  return null;
 }
 
 function makeError(

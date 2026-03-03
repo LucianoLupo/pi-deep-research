@@ -2,12 +2,13 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import { Type } from "@sinclair/typebox";
 import { ensureBridge, stopBridgeServer } from "./bridge.ts";
 import { searchGoogle } from "./search.ts";
-import { fetchAllContent } from "./extract.ts";
+import { fetchAllContent, truncateContent } from "./extract.ts";
 import {
   ENTRY_TYPE,
   storeResult,
   getResult,
   getResultByUrl,
+  getSessionStats,
   getResultByQuery,
   listResults,
   restoreFromSession,
@@ -240,9 +241,16 @@ export default function (pi: ExtensionAPI): void {
           default: false,
         }),
       ),
+      maxWords: Type.Optional(
+        Type.Number({
+          description:
+            "Truncate each page's content to approximately this many words (default: unlimited). " +
+            "Typical values: 2000-5000. Use for initial reads to save context.",
+        }),
+      ),
     }),
     async execute(_toolCallId, params, signal) {
-      const { urls, method = "auto", useJina = false } = params;
+      const { urls, method = "auto", useJina = false, maxWords } = params;
 
       const results: ExtractedContent[] = [];
       const toFetch: string[] = [];
@@ -274,7 +282,16 @@ export default function (pi: ExtensionAPI): void {
         pi.appendEntry(ENTRY_TYPE, data);
       }
 
-      const text = formatExtractedContent(results);
+      // Apply per-URL truncation if maxWords specified
+      const output = maxWords
+        ? results.map((r) =>
+            r.error === null && r.content
+              ? { ...r, content: truncateContent(r.content, maxWords), wordCount: Math.min(r.wordCount, maxWords) }
+              : r,
+          )
+        : results;
+
+      const text = formatExtractedContent(output);
       return { content: [{ type: "text", text }] };
     },
   });
@@ -367,7 +384,13 @@ export default function (pi: ExtensionAPI): void {
         };
       }
 
-      let text = `**Cached research results** (${results.length})\n\n`;
+      // Session summary header
+      const stats = getSessionStats();
+      const wordsK = stats.totalWords >= 1000
+        ? `~${Math.round(stats.totalWords / 1000)}K`
+        : `${stats.totalWords}`;
+      let text = `**Session:** ${stats.searchCount} searches, ${stats.fetchOk + stats.fetchErrors} URLs fetched (${stats.fetchOk} ok, ${stats.fetchErrors} errors), ${wordsK} words total\n\n`;
+      text += `**Cached research results** (${results.length})\n\n`;
       text += results
         .map(
           (r) =>
