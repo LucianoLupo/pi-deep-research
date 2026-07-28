@@ -1,9 +1,16 @@
 {
   "name": "pi-deep-research",
   "version": "0.1.0",
+  "description": "Chrome-native research tools and an auditable multi-session Pi research workflow.",
+  "keywords": ["pi-package", "research", "deep-research", "agents"],
   "type": "module",
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": ["./index.ts"],
+    "skills": ["./skills"]
+  },
+  "scripts": {
+    "lint": "node --check ro/orchestrate.mjs && node --check ro/test/fake-pi.mjs && node --check ro/test/orchestrate.test.mjs",
+    "test": "node --test ro/test/orchestrate.test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
