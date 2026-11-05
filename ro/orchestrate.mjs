@@ -70,7 +70,10 @@ function runId(topic) {
 }
 
 function parsePositiveInteger(raw, flag, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
-  const value = Number.parseInt(raw, 10);
+  if (!/^\d+$/.test(String(raw))) {
+    fail(`${flag} must be an integer between ${min} and ${max}`);
+  }
+  const value = Number(raw);
   if (!Number.isInteger(value) || value < min || value > max) {
     fail(`${flag} must be an integer between ${min} and ${max}`);
   }

@@ -137,3 +137,29 @@ test("refuses to produce a judged report when citation repair leaves invalid URL
     await assert.rejects(readFile(join(output, "judge.json"), "utf8"));
   });
 });
+
+test("numeric flags reject non-integer values", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-ro-args-"));
+  const cases = [
+    [["--agents", "3x"], /--agents must be an integer between 2 and 6/],
+    [["--agents", "2.5"], /--agents must be an integer between 2 and 6/],
+    [["--agents", "1"], /--agents must be an integer between 2 and 6/],
+    [["--agents", "7"], /--agents must be an integer between 2 and 6/],
+    [["--timeout-ms", "600000ms"], /--timeout-ms must be an integer between 1000 and 3600000/],
+  ];
+  for (const [extra, pattern] of cases) {
+    const output = join(root, `run-${extra.join("-").replace(/[^a-z0-9]+/gi, "")}`);
+    const result = await run(process.execPath, [orchestrator, "fixture topic", "--dry-run", "--output", output, "--pi-bin", fakePi, ...extra]);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, pattern);
+  }
+});
+
+test("numeric flags accept valid values", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-ro-args-"));
+  const output = join(root, "run");
+  const result = await run(process.execPath, [orchestrator, "fixture topic", "--dry-run", "--output", output, "--pi-bin", fakePi, "--agents", "2"]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).dryRun, true);
+});
