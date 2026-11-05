@@ -138,6 +138,28 @@ test("refuses to produce a judged report when citation repair leaves invalid URL
   });
 });
 
+test("bad flags print a one-line error without a stack", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-ro-flags-"));
+  const cases = [
+    ["--max-workers", "3", /Unknown option: --max-workers/],
+    ["--agents", "7", /--agents must be an integer between 2 and 6/],
+  ];
+  for (const [flag, value, pattern] of cases) {
+    const output = join(root, `run-${flag.slice(2)}-${value}`);
+    const result = await run(process.execPath, [orchestrator, "topic", "--dry-run", "--output", output, "--pi-bin", fakePi, flag, value]);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr.split("\n")[0], /^\[deep-research-ro\] /);
+    assert.match(result.stderr, pattern);
+    assert.doesNotMatch(result.stderr, /^\s+at /m);
+  }
+});
+
+test("--help prints usage and exits zero", async () => {
+  const result = await run(process.execPath, [orchestrator, "--help"]);
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Usage/);
+});
+
 test("numeric flags reject non-integer values", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-ro-args-"));
   const cases = [
