@@ -1016,4 +1016,7 @@ async function main() {
   }
 }
 
-main();
+main().catch((error) => {
+  console.error(`[deep-research-ro] ${error?.message ?? error}`);
+  process.exitCode = 1;
+});
